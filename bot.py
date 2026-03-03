@@ -13,7 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ════════════════════════════════════════════
 BOT_TOKEN    = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
 ADMIN_ID     = 7249758488
-MANAGER_PHONE = "+992003882970"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
+MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
@@ -268,14 +268,25 @@ async def cb_help(call: CallbackQuery):
     text = (
         "🆘 *ЁРДАМ*\n\n"
         "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
-        "менеҷери мо омода аст! 😊\n\n"
-        f"📞 *Рақами менеҷер:*\n`{MANAGER_PHONE}`\n\n"
+        "администратори мо омода аст! 😊\n\n"
+        f"👤 *Администратор:* {ADMIN_USERNAME}\n\n"
         "Ҳамеша дар хидмати шумо ҳастем! 💙"
     )
-    # Добавляем кнопку "Меню" к сообщению помощи
     await call.message.answer_photo(photo=photo, caption=text,
                                     parse_mode="Markdown",
                                     reply_markup=kb_menu_only())
+
+
+# ─── Кнопка Менеджер (теперь Администратор) ─────────────────────────────────
+@dp.callback_query(F.data == "contact_manager")
+async def cb_manager(call: CallbackQuery):
+    await call.answer()
+    text = (
+        "📞 *Тамос бо администратор*\n\n"
+        f"👤 {ADMIN_USERNAME}\n\n"
+        "Нависед — мо ёрдам мекунем! 💙"
+    )
+    await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
 
 
 # ─── Кнопка Менеджер ─────────────────────────────────────────────────────────
