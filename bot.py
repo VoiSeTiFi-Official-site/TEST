@@ -13,7 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ════════════════════════════════════════════
 BOT_TOKEN    = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
 ADMIN_ID     = 7249758488
-MANAGER_PHONE = "+992XXXXXXXXX"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
+MANAGER_PHONE = "+992003882970"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
