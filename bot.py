@@ -253,7 +253,7 @@ async def send_result(message: Message, score: int):
 
     # Отправляем голосовое сообщение (файл result_audio.ogg)
     try:
-        voice = FSInputFile("AUDIO.oga")
+        voice = FSInputFile("AUDOI.oga")
         await message.answer_voice(voice)
     except FileNotFoundError:
         # Если файл не найден, просто игнорируем (можно залогировать)
