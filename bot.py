@@ -77,7 +77,7 @@ def kb_result():
 @dp.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    photo = FSInputFile("photo_start.jpg")
+    photo = FSInputFile("photo_start.png")
     text = (
         "✨ *Хуш омадед!*\n\n"
         "Салом, дӯсти азиз! 👋\n\n"
@@ -95,7 +95,7 @@ async def cmd_start(message: Message, state: FSMContext):
 async def cb_test(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.answer()
-    photo = FSInputFile("photo_test.jpg")
+    photo = FSInputFile("photo_test.png")
     text = (
         "🧪 *ТЕСТ: «Оё кӯдаки даруни ту ҳанӯз захм дорад?»*\n\n"
         "📌 *Дастур:*\n"
@@ -202,7 +202,7 @@ async def send_result(message: Message, score: int):
 @dp.callback_query(F.data == "help")
 async def cb_help(call: CallbackQuery):
     await call.answer()
-    photo = FSInputFile("photo_help.jpg")
+    photo = FSInputFile("photo_help.png")
     text = (
         "🆘 *ЁРДАМ*\n\n"
         "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
