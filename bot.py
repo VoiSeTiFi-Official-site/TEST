@@ -62,6 +62,9 @@ def kb_answer(q_index: int):
     b.button(text="А — Бисёр вақт",  callback_data=f"ans_A_{q_index}")
     b.button(text="Б — Баъзан",       callback_data=f"ans_B_{q_index}")
     b.button(text="В — Қариб не",     callback_data=f"ans_C_{q_index}")
+    # Кнопка "Назад" — только если это не первый вопрос
+    if q_index > 0:
+        b.button(text="🔙 Назад", callback_data="back")
     b.adjust(1)
     return b.as_markup()
 
@@ -115,7 +118,8 @@ async def cb_test(call: CallbackQuery, state: FSMContext):
 async def cb_begin(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.set_state(Quiz.question)
-    await state.update_data(q_index=0, total_score=0)
+    # Вместо total_score храним список ответов
+    await state.update_data(q_index=0, answers=[])
     await call.message.answer(
         QUESTIONS[0],
         parse_mode="Markdown",
@@ -138,20 +142,51 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
     if q_index != current:
         return
 
-    score = data.get("total_score", 0) + SCORES[letter]
+    answers = data.get("answers", [])
+
+    # Если на этот вопрос ещё не отвечали — добавляем ответ,
+    # иначе заменяем старый ответ на новый (если вернулись назад и изменили)
+    if len(answers) <= q_index:
+        answers.append(letter)
+    else:
+        answers[q_index] = letter
+
     next_q = current + 1
 
     if next_q < len(QUESTIONS):
-        await state.update_data(q_index=next_q, total_score=score)
+        await state.update_data(q_index=next_q, answers=answers)
         await call.message.answer(
             QUESTIONS[next_q],
             parse_mode="Markdown",
             reply_markup=kb_answer(next_q)
         )
     else:
-        # Все вопросы пройдены
+        # Все вопросы пройдены — вычисляем сумму баллов
+        total_score = sum(SCORES[a] for a in answers)
         await state.clear()
-        await send_result(call.message, score)
+        await send_result(call.message, total_score)
+
+
+# ─── Кнопка НАЗАД ─────────────────────────────────────────────────────────────
+@dp.callback_query(Quiz.question, F.data == "back")
+async def cb_back(call: CallbackQuery, state: FSMContext):
+    await call.answer()
+    data = await state.get_data()
+    current = data.get("q_index", 0)
+
+    if current <= 0:
+        # На первом вопросе назад не работает (кнопки там нет, но на всякий случай)
+        return
+
+    prev_index = current - 1
+    # Удалять ответ не нужно — просто показываем предыдущий вопрос,
+    # пользователь может изменить ответ, и тогда заменится значение в списке
+    await state.update_data(q_index=prev_index)
+    await call.message.answer(
+        QUESTIONS[prev_index],
+        parse_mode="Markdown",
+        reply_markup=kb_answer(prev_index)
+    )
 
 
 async def send_result(message: Message, score: int):
