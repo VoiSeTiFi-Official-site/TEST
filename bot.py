@@ -65,6 +65,8 @@ def kb_answer(q_index: int):
     # Кнопка "Назад" — только если это не первый вопрос
     if q_index > 0:
         b.button(text="🔙 Назад", callback_data="back")
+    # Кнопка "Меню" на всех вопросах
+    b.button(text="🏠 Меню", callback_data="main_menu")
     b.adjust(1)
     return b.as_markup()
 
@@ -72,7 +74,14 @@ def kb_result():
     b = InlineKeyboardBuilder()
     b.button(text="🔄 Такроран гузаштан", callback_data="start_test")
     b.button(text="📞 Менеҷер",           callback_data="contact_manager")
+    b.button(text="🏠 Меню",               callback_data="main_menu")
     b.adjust(1)
+    return b.as_markup()
+
+def kb_menu_only():
+    """Клавиатура с одной кнопкой «Меню» (для помощи и т.п.)"""
+    b = InlineKeyboardBuilder()
+    b.button(text="🏠 Меню", callback_data="main_menu")
     return b.as_markup()
 
 
@@ -118,7 +127,6 @@ async def cb_test(call: CallbackQuery, state: FSMContext):
 async def cb_begin(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.set_state(Quiz.question)
-    # Вместо total_score храним список ответов
     await state.update_data(q_index=0, answers=[])
     await call.message.answer(
         QUESTIONS[0],
@@ -138,14 +146,10 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
     data    = await state.get_data()
     current = data.get("q_index", 0)
 
-    # Защита от повторного нажатия старой кнопки
     if q_index != current:
         return
 
     answers = data.get("answers", [])
-
-    # Если на этот вопрос ещё не отвечали — добавляем ответ,
-    # иначе заменяем старый ответ на новый (если вернулись назад и изменили)
     if len(answers) <= q_index:
         answers.append(letter)
     else:
@@ -161,7 +165,6 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
             reply_markup=kb_answer(next_q)
         )
     else:
-        # Все вопросы пройдены — вычисляем сумму баллов
         total_score = sum(SCORES[a] for a in answers)
         await state.clear()
         await send_result(call.message, total_score)
@@ -175,18 +178,34 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
     current = data.get("q_index", 0)
 
     if current <= 0:
-        # На первом вопросе назад не работает (кнопки там нет, но на всякий случай)
         return
 
     prev_index = current - 1
-    # Удалять ответ не нужно — просто показываем предыдущий вопрос,
-    # пользователь может изменить ответ, и тогда заменится значение в списке
     await state.update_data(q_index=prev_index)
     await call.message.answer(
         QUESTIONS[prev_index],
         parse_mode="Markdown",
         reply_markup=kb_answer(prev_index)
     )
+
+
+# ─── Кнопка МЕНЮ (главное меню) ───────────────────────────────────────────────
+@dp.callback_query(F.data == "main_menu")
+async def cb_main_menu(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await call.answer()
+    # Показываем главное меню как в /start
+    photo = FSInputFile("photo_start.png")
+    text = (
+        "✨ *Хуш омадед!*\n\n"
+        "Салом, дӯсти азиз! 👋\n\n"
+        "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
+        "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
+        "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
+        "👇 Яке аз тугмаҳоро пахш кунед:"
+    )
+    await call.message.answer_photo(photo=photo, caption=text,
+                                    parse_mode="Markdown", reply_markup=kb_start())
 
 
 async def send_result(message: Message, score: int):
@@ -232,6 +251,14 @@ async def send_result(message: Message, score: int):
     )
     await message.answer(text, parse_mode="Markdown", reply_markup=kb_result())
 
+    # Отправляем голосовое сообщение (файл result_audio.ogg)
+    try:
+        voice = FSInputFile("AUDIO.oga")
+        await message.answer_voice(voice)
+    except FileNotFoundError:
+        # Если файл не найден, просто игнорируем (можно залогировать)
+        logging.warning("Файл result_audio.ogg не найден, голосовое сообщение не отправлено.")
+
 
 # ─── Кнопка ЁРДАМ ────────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "help")
@@ -245,8 +272,10 @@ async def cb_help(call: CallbackQuery):
         f"📞 *Рақами менеҷер:*\n`{MANAGER_PHONE}`\n\n"
         "Ҳамеша дар хидмати шумо ҳастем! 💙"
     )
+    # Добавляем кнопку "Меню" к сообщению помощи
     await call.message.answer_photo(photo=photo, caption=text,
-                                    parse_mode="Markdown")
+                                    parse_mode="Markdown",
+                                    reply_markup=kb_menu_only())
 
 
 # ─── Кнопка Менеджер ─────────────────────────────────────────────────────────
@@ -258,7 +287,8 @@ async def cb_manager(call: CallbackQuery):
         f"Рақами телефон: `{MANAGER_PHONE}`\n\n"
         "Зинг занед — мо ёрдам мекунем! 💙"
     )
-    await call.message.answer(text, parse_mode="Markdown")
+    # Тоже добавим кнопку "Меню" (опционально)
+    await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
 
 
 # ─── ЗАПУСК ──────────────────────────────────────────────────────────────────
