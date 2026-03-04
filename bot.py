@@ -11,8 +11,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ════════════════════════════════════════════
 #  ⚙️  НАСТРОЙКИ — ЗАМЕНИ НА СВОИ
 # ════════════════════════════════════════════
-BOT_TOKEN    = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
-ADMIN_ID     = 7249758488
+BOT_TOKEN     = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
+ADMIN_ID      = 7249758488
 MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
 # ════════════════════════════════════════════
 
@@ -62,10 +62,8 @@ def kb_answer(q_index: int):
     b.button(text="А — Бисёр вақт",  callback_data=f"ans_A_{q_index}")
     b.button(text="Б — Баъзан",       callback_data=f"ans_B_{q_index}")
     b.button(text="В — Қариб не",     callback_data=f"ans_C_{q_index}")
-    # Кнопка "Назад" — только если это не первый вопрос
     if q_index > 0:
         b.button(text="🔙 Назад", callback_data="back")
-    # Кнопка "Меню" на всех вопросах
     b.button(text="🏠 Меню", callback_data="main_menu")
     b.adjust(1)
     return b.as_markup()
@@ -79,7 +77,6 @@ def kb_result():
     return b.as_markup()
 
 def kb_menu_only():
-    """Клавиатура с одной кнопкой «Меню» (для помощи и т.п.)"""
     b = InlineKeyboardBuilder()
     b.button(text="🏠 Меню", callback_data="main_menu")
     return b.as_markup()
@@ -139,8 +136,8 @@ async def cb_begin(call: CallbackQuery, state: FSMContext):
 @dp.callback_query(Quiz.question, F.data.startswith("ans_"))
 async def cb_answer(call: CallbackQuery, state: FSMContext):
     await call.answer()
-    parts   = call.data.split("_")       # ans_A_0
-    letter  = parts[1]                   # A / B / C
+    parts   = call.data.split("_")
+    letter  = parts[1]
     q_index = int(parts[2])
 
     data    = await state.get_data()
@@ -189,12 +186,11 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
     )
 
 
-# ─── Кнопка МЕНЮ (главное меню) ───────────────────────────────────────────────
+# ─── Кнопка МЕНЮ ─────────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "main_menu")
 async def cb_main_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.answer()
-    # Показываем главное меню как в /start
     photo = FSInputFile("photo_start.png")
     text = (
         "✨ *Хуш омадед!*\n\n"
@@ -208,6 +204,7 @@ async def cb_main_menu(call: CallbackQuery, state: FSMContext):
                                     parse_mode="Markdown", reply_markup=kb_start())
 
 
+# ─── Результат ────────────────────────────────────────────────────────────────
 async def send_result(message: Message, score: int):
     if score <= 6:
         icon  = "🟢"
@@ -251,13 +248,11 @@ async def send_result(message: Message, score: int):
     )
     await message.answer(text, parse_mode="Markdown", reply_markup=kb_result())
 
-    # Отправляем голосовое сообщение (файл result_audio.ogg)
     try:
         voice = FSInputFile("AUDOI.oga")
         await message.answer_voice(voice)
     except FileNotFoundError:
-        # Если файл не найден, просто игнорируем (можно залогировать)
-        logging.warning("Файл result_audio.ogg не найден, голосовое сообщение не отправлено.")
+        logging.warning("Файл AUDOI.oga не найден, голосовое сообщение не отправлено.")
 
 
 # ─── Кнопка ЁРДАМ ────────────────────────────────────────────────────────────
@@ -269,7 +264,7 @@ async def cb_help(call: CallbackQuery):
         "🆘 *ЁРДАМ*\n\n"
         "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
         "администратори мо омода аст! 😊\n\n"
-        f"👤 *Администратор:* {ADMIN_USERNAME}\n\n"
+        f"👤 *Администратор:* {MANAGER_PHONE}\n\n"   # ✅ ИСПРАВЛЕНО: было ADMIN_USERNAME
         "Ҳамеша дар хидмати шумо ҳастем! 💙"
     )
     await call.message.answer_photo(photo=photo, caption=text,
@@ -277,28 +272,15 @@ async def cb_help(call: CallbackQuery):
                                     reply_markup=kb_menu_only())
 
 
-# ─── Кнопка Менеджер (теперь Администратор) ─────────────────────────────────
-@dp.callback_query(F.data == "contact_manager")
-async def cb_manager(call: CallbackQuery):
-    await call.answer()
-    text = (
-        "📞 *Тамос бо администратор*\n\n"
-        f"👤 {ADMIN_USERNAME}\n\n"
-        "Нависед — мо ёрдам мекунем! 💙"
-    )
-    await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
-
-
-# ─── Кнопка Менеджер ─────────────────────────────────────────────────────────
-@dp.callback_query(F.data == "contact_manager")
+# ─── Кнопка МЕНЕДЖЕР ─────────────────────────────────────────────────────────
+@dp.callback_query(F.data == "contact_manager")              # ✅ ОДИН обработчик
 async def cb_manager(call: CallbackQuery):
     await call.answer()
     text = (
         "📞 *Тамос бо менеҷер*\n\n"
-        f"Рақами телефон: `{MANAGER_PHONE}`\n\n"
-        "Зинг занед — мо ёрдам мекунем! 💙"
+        f"👤 {MANAGER_PHONE}\n\n"
+        "Нависед — мо ёрдам мекунем! 💙"
     )
-    # Тоже добавим кнопку "Меню" (опционально)
     await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
 
 
