@@ -276,11 +276,12 @@ async def cb_help(call: CallbackQuery):
 @dp.callback_query(F.data == "contact_manager")              # ✅ ОДИН обработчик
 async def cb_manager(call: CallbackQuery):
     await call.answer()
-    text = (
-        "📞 *Тамос бо менеҷер*\n\n"
-        f"👤 {MANAGER_PHONE}\n\n"
-        "Нависед — мо ёрдам мекунем! 💙"
-    )
+    # В cb_manager замени текст на:
+text = (
+    "📞 *Тамос бо менеҷер*\n\n"
+    f"👤 [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
+    "Нависед — мо ёрдам мекунем! 💙"
+)
     await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
 
 
