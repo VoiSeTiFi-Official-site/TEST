@@ -1,19 +1,22 @@
 import asyncio
 import logging
+import io
+from datetime import datetime
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from fpdf import FPDF
 
 # ════════════════════════════════════════════
 #  ⚙️  НАСТРОЙКИ — ЗАМЕНИ НА СВОИ
 # ════════════════════════════════════════════
 BOT_TOKEN     = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
 ADMIN_ID      = 7249758488
-MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"   # ← ВСТАВЬ НОМЕР МЕНЕДЖЕРА СЮДА
+MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
@@ -28,20 +31,128 @@ class Quiz(StatesGroup):
 
 # ─── ВОПРОСЫ ТЕСТА ───────────────────────────────────────────────────────────
 QUESTIONS = [
-    "❓ *Савол 1 аз 10*\n\nВақте касе туро танқид мекунад, ту зуд ранҷида мешавӣ?",
-    "❓ *Савол 2 аз 10*\n\nБаъзан бе сабаби равшан худро танҳо ҳис мекунӣ?",
-    "❓ *Савол 3 аз 10*\n\nОё ту аз партофта шудан ё рад шудан метарсӣ?",
-    "❓ *Савол 4 аз 10*\n\nВақте асабонӣ мешавӣ, ором шудан бароят душвор аст?",
-    "❓ *Савол 5 аз 10*\n\nОё ту зуд худро гунаҳкор ҳис мекунӣ, ҳатто вақте айбдор нестӣ?",
-    "❓ *Савол 6 аз 10*\n\nБа ту гуфтани «не» ба дигарон мушкил аст?",
-    "❓ *Савол 7 аз 10*\n\nБаъзан ҳис мекунӣ, ки муҳаббатро бояд «сазовор» шавӣ?",
-    "❓ *Савол 8 аз 10*\n\nДар муносибатҳо аз ҳад вобаста ё баръакс сард мешавӣ?",
-    "❓ *Савол 9 аз 10*\n\nОё дар дарунат ҳисси ғам ё холигии кӯҳна ҳаст?",
-    "❓ *Савол 10 аз 10*\n\nВақте касе баланд гап мезанад, баданат танг мешавад?",
+    "Вақте касе туро танқид мекунад, ту зуд ранҷида мешавӣ?",
+    "Баъзан бе сабаби равшан худро танҳо ҳис мекунӣ?",
+    "Оё ту аз партофта шудан ё рад шудан метарсӣ?",
+    "Вақте асабонӣ мешавӣ, ором шудан бароят душвор аст?",
+    "Оё ту зуд худро гунаҳкор ҳис мекунӣ, ҳатто вақте айбдор нестӣ?",
+    "Ба ту гуфтани «не» ба дигарон мушкил аст?",
+    "Баъзан ҳис мекунӣ, ки муҳаббатро бояд «сазовор» шавӣ?",
+    "Дар муносибатҳо аз ҳад вобаста ё баръакс сард мешавӣ?",
+    "Оё дар дарунат ҳисси ғам ё холигии кӯҳна ҳаст?",
+    "Вақте касе баланд гап мезанад, баданат танг мешавад?",
 ]
 
-# А=2, Б=1, В=0
 SCORES = {"A": 2, "B": 1, "C": 0}
+
+
+# ─── ПРОГРЕСС БАР ────────────────────────────────────────────────────────────
+def make_progress(current: int, total: int = 10) -> str:
+    filled = "▰" * current
+    empty  = "▱" * (total - current)
+    return f"📊 Савол {current}/{total}  {filled}{empty}"
+
+
+# ─── PDF ОТЧЁТ ───────────────────────────────────────────────────────────────
+def generate_pdf(user_name: str, score: int, answers: list) -> bytes:
+    if score <= 6:
+        level = "Кудаки дарун — нисбатан ором"
+        color = (0, 180, 0)
+    elif score <= 13:
+        level = "Кудаки дарун — захм дорад"
+        color = (220, 160, 0)
+    else:
+        level = "Кудаки дарун — баланд фарёд мезанад"
+        color = (200, 0, 0)
+
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Заголовок
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 15, "NATIJA / REZULTAT", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    # Дата
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 8, datetime.now().strftime("%d.%m.%Y  %H:%M"), align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    # Пользователь
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 10, f"Foydalanuvchi: {user_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    # Разделитель
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(8)
+
+    # Балл
+    pdf.set_font("Helvetica", "B", 36)
+    pdf.set_text_color(*color)
+    pdf.cell(0, 20, f"{score} / 20", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    # Уровень
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_text_color(*color)
+    pdf.cell(0, 10, level, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # Визуальный прогресс-бар
+    bar_x = 20
+    bar_y = pdf.get_y()
+    bar_w = 170
+    bar_h = 10
+    fill_w = int(bar_w * score / 20)
+
+    pdf.set_fill_color(220, 220, 220)
+    pdf.rect(bar_x, bar_y, bar_w, bar_h, "F")
+    pdf.set_fill_color(*color)
+    pdf.rect(bar_x, bar_y, fill_w, bar_h, "F")
+    pdf.ln(18)
+
+    # Разделитель
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(8)
+
+    # Таблица ответов
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 8, "Javoblar / Ответы:", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    answer_labels = {"A": "Bisyor vaqt (A)", "B": "Bazzan (B)", "C": "Qarib ne (C)"}
+
+    for i, (q, a) in enumerate(zip(QUESTIONS, answers), 1):
+        # Фон строки
+        if i % 2 == 0:
+            pdf.set_fill_color(245, 245, 245)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(80, 80, 80)
+        # Номер + короткий вопрос
+        short_q = f"{i}. " + (q[:55] + "..." if len(q) > 55 else q)
+        pdf.cell(130, 8, short_q, fill=True)
+        # Ответ
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*color)
+        pdf.cell(50, 8, answer_labels.get(a, a), align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(10)
+
+    # Футер
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 8, f"Menejer bilan bog'laning: {MANAGER_PHONE}", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    return pdf.output()
 
 
 # ─── КЛАВИАТУРЫ ──────────────────────────────────────────────────────────────
@@ -114,8 +225,7 @@ async def cb_test(call: CallbackQuery, state: FSMContext):
         "• В — қариб не\n\n"
         "💡 Тест 10 савол дорад. Ҳозир тайёр?"
     )
-    await call.message.answer_photo(photo=photo, caption=text,
-                                    parse_mode="Markdown",
+    await call.message.edit_caption(caption=text, parse_mode="Markdown",
                                     reply_markup=kb_begin_test())
 
 
@@ -125,11 +235,11 @@ async def cb_begin(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.set_state(Quiz.question)
     await state.update_data(q_index=0, answers=[])
-    await call.message.answer(
-        QUESTIONS[0],
-        parse_mode="Markdown",
-        reply_markup=kb_answer(0)
-    )
+
+    progress = make_progress(1)
+    text = f"{progress}\n\n❓ *Савол 1 аз 10*\n\n{QUESTIONS[0]}"
+    await call.message.edit_caption(caption=text, parse_mode="Markdown",
+                                    reply_markup=kb_answer(0))
 
 
 # ─── Ответы на вопросы ────────────────────────────────────────────────────────
@@ -156,15 +266,14 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
 
     if next_q < len(QUESTIONS):
         await state.update_data(q_index=next_q, answers=answers)
-        await call.message.answer(
-            QUESTIONS[next_q],
-            parse_mode="Markdown",
-            reply_markup=kb_answer(next_q)
-        )
+        progress = make_progress(next_q + 1)
+        text = f"{progress}\n\n❓ *Савол {next_q + 1} аз 10*\n\n{QUESTIONS[next_q]}"
+        await call.message.edit_caption(caption=text, parse_mode="Markdown",
+                                        reply_markup=kb_answer(next_q))
     else:
         total_score = sum(SCORES[a] for a in answers)
         await state.clear()
-        await send_result(call.message, total_score)
+        await send_result(call, total_score, answers)
 
 
 # ─── Кнопка НАЗАД ─────────────────────────────────────────────────────────────
@@ -179,11 +288,10 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
 
     prev_index = current - 1
     await state.update_data(q_index=prev_index)
-    await call.message.answer(
-        QUESTIONS[prev_index],
-        parse_mode="Markdown",
-        reply_markup=kb_answer(prev_index)
-    )
+    progress = make_progress(prev_index + 1)
+    text = f"{progress}\n\n❓ *Савол {prev_index + 1} аз 10*\n\n{QUESTIONS[prev_index]}"
+    await call.message.edit_caption(caption=text, parse_mode="Markdown",
+                                    reply_markup=kb_answer(prev_index))
 
 
 # ─── Кнопка МЕНЮ ─────────────────────────────────────────────────────────────
@@ -205,7 +313,7 @@ async def cb_main_menu(call: CallbackQuery, state: FSMContext):
 
 
 # ─── Результат ────────────────────────────────────────────────────────────────
-async def send_result(message: Message, score: int):
+async def send_result(call: CallbackQuery, score: int, answers: list):
     if score <= 6:
         icon  = "🟢"
         title = "Кӯдаки дарун — нисбатан ором"
@@ -246,13 +354,29 @@ async def send_result(message: Message, score: int):
         "━━━━━━━━━━━━━━━━\n"
         "Такроран тест гузаред ё бо менеҷер тамос гиред 👇"
     )
-    await message.answer(text, parse_mode="Markdown", reply_markup=kb_result())
+    await call.message.edit_caption(caption=text, parse_mode="Markdown",
+                                    reply_markup=kb_result())
 
+    # Голосовое
     try:
         voice = FSInputFile("AUDOI.oga")
-        await message.answer_voice(voice)
+        await call.message.answer_voice(voice)
     except FileNotFoundError:
-        logging.warning("Файл AUDOI.oga не найден, голосовое сообщение не отправлено.")
+        logging.warning("AUDOI.oga не найден.")
+
+    # PDF отчёт
+    try:
+        user = call.from_user
+        user_name = user.full_name or user.username or "Foydalanuvchi"
+        pdf_bytes = generate_pdf(user_name, score, answers)
+        pdf_file = BufferedInputFile(bytes(pdf_bytes), filename="natija.pdf")
+        await call.message.answer_document(
+            pdf_file,
+            caption="📄 *Натиҷаи шумо дар PDF* — нигоҳ доред! 🗂",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logging.error(f"PDF error: {e}")
 
 
 # ─── Кнопка ЁРДАМ ────────────────────────────────────────────────────────────
@@ -264,12 +388,12 @@ async def cb_help(call: CallbackQuery):
         "🆘 *ЁРДАМ*\n\n"
         "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
         "администратори мо омода аст! 😊\n\n"
-        f"👤 *Администратор:* {MANAGER_PHONE}\n\n"   # ✅ ИСПРАВЛЕНО: было ADMIN_USERNAME
+        f"👤 *Администратор:* [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
         "Ҳамеша дар хидмати шумо ҳастем! 💙"
     )
-    await call.message.answer_photo(photo=photo, caption=text,
-                                    parse_mode="Markdown",
+    await call.message.edit_caption(caption=text, parse_mode="Markdown",
                                     reply_markup=kb_menu_only())
+
 
 # ─── Кнопка МЕНЕДЖЕР ─────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "contact_manager")
