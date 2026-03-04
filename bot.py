@@ -1,9 +1,8 @@
 import asyncio
 import logging
-import io
 from datetime import datetime
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile
+from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InputMediaPhoto
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -56,101 +55,85 @@ def make_progress(current: int, total: int = 10) -> str:
 # ─── PDF ОТЧЁТ ───────────────────────────────────────────────────────────────
 def generate_pdf(user_name: str, score: int, answers: list) -> bytes:
     if score <= 6:
-        level = "Кудаки дарун — нисбатан ором"
+        level = "Kudaki darun - nisbatan orom"
         color = (0, 180, 0)
     elif score <= 13:
-        level = "Кудаки дарун — захм дорад"
+        level = "Kudaki darun - zahm dorad"
         color = (220, 160, 0)
     else:
-        level = "Кудаки дарун — баланд фарёд мезанад"
+        level = "Kudaki darun - baland faryed mezanad"
         color = (200, 0, 0)
 
     pdf = FPDF()
     pdf.add_page()
 
-    # Заголовок
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_text_color(40, 40, 40)
     pdf.cell(0, 15, "NATIJA / REZULTAT", align="C", new_x="LMARGIN", new_y="NEXT")
 
-    # Дата
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 8, datetime.now().strftime("%d.%m.%Y  %H:%M"), align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
-    # Пользователь
     pdf.set_font("Helvetica", "B", 13)
     pdf.set_text_color(40, 40, 40)
     pdf.cell(0, 10, f"Foydalanuvchi: {user_name}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
-    # Разделитель
     pdf.set_draw_color(200, 200, 200)
     pdf.set_line_width(0.5)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(8)
 
-    # Балл
     pdf.set_font("Helvetica", "B", 36)
     pdf.set_text_color(*color)
     pdf.cell(0, 20, f"{score} / 20", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
-    # Уровень
     pdf.set_font("Helvetica", "B", 14)
     pdf.set_text_color(*color)
     pdf.cell(0, 10, level, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
-    # Визуальный прогресс-бар
     bar_x = 20
     bar_y = pdf.get_y()
     bar_w = 170
     bar_h = 10
     fill_w = int(bar_w * score / 20)
-
     pdf.set_fill_color(220, 220, 220)
     pdf.rect(bar_x, bar_y, bar_w, bar_h, "F")
     pdf.set_fill_color(*color)
     pdf.rect(bar_x, bar_y, fill_w, bar_h, "F")
     pdf.ln(18)
 
-    # Разделитель
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(8)
 
-    # Таблица ответов
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 8, "Javoblar / Ответы:", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, "Javoblar / Otvetlar:", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
     answer_labels = {"A": "Bisyor vaqt (A)", "B": "Bazzan (B)", "C": "Qarib ne (C)"}
 
     for i, (q, a) in enumerate(zip(QUESTIONS, answers), 1):
-        # Фон строки
         if i % 2 == 0:
             pdf.set_fill_color(245, 245, 245)
         else:
             pdf.set_fill_color(255, 255, 255)
-
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(80, 80, 80)
-        # Номер + короткий вопрос
         short_q = f"{i}. " + (q[:55] + "..." if len(q) > 55 else q)
         pdf.cell(130, 8, short_q, fill=True)
-        # Ответ
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(*color)
         pdf.cell(50, 8, answer_labels.get(a, a), align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(10)
-
-    # Футер
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 8, f"Menejer bilan bog'laning: {MANAGER_PHONE}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Menejer: {MANAGER_PHONE}", align="C", new_x="LMARGIN", new_y="NEXT")
 
     return pdf.output()
 
@@ -215,18 +198,22 @@ async def cmd_start(message: Message, state: FSMContext):
 async def cb_test(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.answer()
-    photo = FSInputFile("photo_test.png")
-    text = (
-        "🧪 *ТЕСТ: «Оё кӯдаки даруни ту ҳанӯз захм дорад?»*\n\n"
-        "📌 *Дастур:*\n"
-        "Ба ҳар савол ростқавлона ҷавоб деҳ:\n\n"
-        "• А — бисёр вақт\n"
-        "• Б — баъзан\n"
-        "• В — қариб не\n\n"
-        "💡 Тест 10 савол дорад. Ҳозир тайёр?"
+    await call.message.edit_media(
+        media=InputMediaPhoto(
+            media=FSInputFile("photo_test.png"),
+            caption=(
+                "🧪 *ТЕСТ: «Оё кӯдаки даруни ту ҳанӯз захм дорад?»*\n\n"
+                "📌 *Дастур:*\n"
+                "Ба ҳар савол ростқавлона ҷавоб деҳ:\n\n"
+                "• А — бисёр вақт\n"
+                "• Б — баъзан\n"
+                "• В — қариб не\n\n"
+                "💡 Тест 10 савол дорад. Ҳозир тайёр?"
+            ),
+            parse_mode="Markdown"
+        ),
+        reply_markup=kb_begin_test()
     )
-    await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                    reply_markup=kb_begin_test())
 
 
 # ─── Начало теста ─────────────────────────────────────────────────────────────
@@ -235,7 +222,6 @@ async def cb_begin(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.set_state(Quiz.question)
     await state.update_data(q_index=0, answers=[])
-
     progress = make_progress(1)
     text = f"{progress}\n\n❓ *Савол 1 аз 10*\n\n{QUESTIONS[0]}"
     await call.message.edit_caption(caption=text, parse_mode="Markdown",
@@ -282,10 +268,8 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
     await call.answer()
     data = await state.get_data()
     current = data.get("q_index", 0)
-
     if current <= 0:
         return
-
     prev_index = current - 1
     await state.update_data(q_index=prev_index)
     progress = make_progress(prev_index + 1)
@@ -299,17 +283,21 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
 async def cb_main_menu(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.answer()
-    photo = FSInputFile("photo_start.png")
-    text = (
-        "✨ *Хуш омадед!*\n\n"
-        "Салом, дӯсти азиз! 👋\n\n"
-        "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
-        "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
-        "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
-        "👇 Яке аз тугмаҳоро пахш кунед:"
+    await call.message.edit_media(
+        media=InputMediaPhoto(
+            media=FSInputFile("photo_start.png"),
+            caption=(
+                "✨ *Хуш омадед!*\n\n"
+                "Салом, дӯсти азиз! 👋\n\n"
+                "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
+                "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
+                "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
+                "👇 Яке аз тугмаҳоро пахш кунед:"
+            ),
+            parse_mode="Markdown"
+        ),
+        reply_markup=kb_start()
     )
-    await call.message.answer_photo(photo=photo, caption=text,
-                                    parse_mode="Markdown", reply_markup=kb_start())
 
 
 # ─── Результат ────────────────────────────────────────────────────────────────
@@ -383,16 +371,20 @@ async def send_result(call: CallbackQuery, score: int, answers: list):
 @dp.callback_query(F.data == "help")
 async def cb_help(call: CallbackQuery):
     await call.answer()
-    photo = FSInputFile("photo_help.png")
-    text = (
-        "🆘 *ЁРДАМ*\n\n"
-        "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
-        "администратори мо омода аст! 😊\n\n"
-        f"👤 *Администратор:* [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
-        "Ҳамеша дар хидмати шумо ҳастем! 💙"
+    await call.message.edit_media(
+        media=InputMediaPhoto(
+            media=FSInputFile("photo_help.png"),
+            caption=(
+                "🆘 *ЁРДАМ*\n\n"
+                "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
+                "администратори мо омода аст! 😊\n\n"
+                f"👤 *Администратор:* [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
+                "Ҳамеша дар хидмати шумо ҳастем! 💙"
+            ),
+            parse_mode="Markdown"
+        ),
+        reply_markup=kb_menu_only()
     )
-    await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                    reply_markup=kb_menu_only())
 
 
 # ─── Кнопка МЕНЕДЖЕР ─────────────────────────────────────────────────────────
