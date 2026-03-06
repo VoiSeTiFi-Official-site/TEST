@@ -16,6 +16,7 @@ from fpdf import FPDF
 BOT_TOKEN     = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
 ADMIN_ID      = 7249758488
 MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"
+DEV_USERNAME  = "@Mustafo_IT"
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
@@ -172,6 +173,14 @@ def kb_result():
 def kb_menu_only():
     b = InlineKeyboardBuilder()
     b.button(text="🏠 Меню", callback_data="main_menu")
+    return b.as_markup()
+
+def kb_help():
+    b = InlineKeyboardBuilder()
+    b.button(text="🛠 Техподдержка",  url=f"https://t.me/{DEV_USERNAME.lstrip('@')}")
+    b.button(text="💬 Менеҷер",       url=f"https://t.me/{MANAGER_PHONE.lstrip('@')}")
+    b.button(text="🏠 Меню",           callback_data="main_menu")
+    b.adjust(2, 1)
     return b.as_markup()
 
 
@@ -379,14 +388,21 @@ async def cb_help(call: CallbackQuery):
             media=FSInputFile("photo_help.png"),
             caption=(
                 "🆘 *ЁРДАМ*\n\n"
-                "Агар саволе дошта бошед ё кӯмак лозим бошад —\n"
-                "администратори мо омода аст! 😊\n\n"
-                f"👤 *Администратор:* [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "🛠 *Техподдержка:*\n"
+                "Агар бот кор намекунад, тугма фишор намешавад,\n"
+                "PDF наомад ё хатогие дидед — нависед:\n"
+                f"👤 [{DEV_USERNAME}](https://t.me/{DEV_USERNAME.lstrip('@')})\n\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "💬 *Саволҳо оид ба курс:*\n"
+                "Консултатсия, нарх, пардохт ва дигар саволҳо —\n"
+                "менеҷери мо омода аст:\n"
+                f"👤 [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
                 "Ҳамеша дар хидмати шумо ҳастем! 💙"
             ),
             parse_mode="Markdown"
         ),
-        reply_markup=kb_menu_only()
+        reply_markup=kb_help()
     )
 
 
