@@ -1,14 +1,12 @@
 import asyncio
 import logging
-from datetime import datetime
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery, FSInputFile, InputMediaPhoto
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from fpdf import FPDF
 
 # ════════════════════════════════════════════
 #  ⚙️  НАСТРОЙКИ — ЗАМЕНИ НА СВОИ
@@ -22,6 +20,9 @@ DEV_USERNAME  = "@Mustafo_IT"
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher(storage=MemoryStorage())
+
+# ─── СЧЁТЧИК ПОЛЬЗОВАТЕЛЕЙ (в памяти) ───────────────────────────────────────
+user_counter: int = 0
 
 
 # ─── FSM СОСТОЯНИЯ ───────────────────────────────────────────────────────────
@@ -53,90 +54,56 @@ def make_progress(current: int, total: int = 10) -> str:
     return f"📊 Савол {current}/{total}  {filled}{empty}"
 
 
-# ─── PDF ОТЧЁТ ───────────────────────────────────────────────────────────────
-def generate_pdf(user_name: str, score: int, answers: list) -> bytes:
-    if score <= 6:
-        level = "Kudaki darun - nisbatan orom"
-        color = (0, 180, 0)
-    elif score <= 13:
-        level = "Kudaki darun - zahm dorad"
-        color = (220, 160, 0)
-    else:
-        level = "Kudaki darun - baland faryed mezanad"
-        color = (200, 0, 0)
+# ─── АВТО-НАПОМИНАНИЯ (1 РАЗ, на таджикском) ─────────────────────────────────
+async def remind_unfinished(user_id: int, state: FSMContext):
+    """Начал тест, но не закончил → через 5 мин напомнить 1 раз"""
+    await asyncio.sleep(300)
+    data = await state.get_data()
+    if data.get("in_quiz") and not data.get("reminded_unfinished"):
+        await state.update_data(reminded_unfinished=True)
+        kb = InlineKeyboardBuilder()
+        kb.button(text="▶️ Тестро идома деҳ", callback_data="begin_quiz")
+        kb.button(text="🏠 Меню",              callback_data="main_menu")
+        kb.adjust(1)
+        try:
+            await bot.send_message(
+                user_id,
+                "⏰ *Эй, дӯст!*\n\n"
+                "Ту тестро нимакора гузоштӣ... 🤔\n\n"
+                "Шояд ҳамин натиҷа муҳимтарин чизест\n"
+                "ки имрӯз барои худат кашф мекунӣ! 💡\n\n"
+                "👇 Идома деҳ — танҳо чанд савол монда:",
+                parse_mode="Markdown",
+                reply_markup=kb.as_markup()
+            )
+        except Exception as e:
+            logging.warning(f"Remind unfinished error: {e}")
 
-    pdf = FPDF()
-    pdf.add_page()
 
-    pdf.set_font("Helvetica", "B", 22)
-    pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 15, "NATIJA / REZULTAT", align="C", new_x="LMARGIN", new_y="NEXT")
-
-    pdf.set_font("Helvetica", "", 10)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 8, datetime.now().strftime("%d.%m.%Y  %H:%M"), align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(5)
-
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 10, f"Foydalanuvchi: {user_name}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
-
-    pdf.set_draw_color(200, 200, 200)
-    pdf.set_line_width(0.5)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(8)
-
-    pdf.set_font("Helvetica", "B", 36)
-    pdf.set_text_color(*color)
-    pdf.cell(0, 20, f"{score} / 20", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
-
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.set_text_color(*color)
-    pdf.cell(0, 10, level, align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(8)
-
-    bar_x = 20
-    bar_y = pdf.get_y()
-    bar_w = 170
-    bar_h = 10
-    fill_w = int(bar_w * score / 20)
-    pdf.set_fill_color(220, 220, 220)
-    pdf.rect(bar_x, bar_y, bar_w, bar_h, "F")
-    pdf.set_fill_color(*color)
-    pdf.rect(bar_x, bar_y, fill_w, bar_h, "F")
-    pdf.ln(18)
-
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(8)
-
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 8, "Javoblar / Otvetlar:", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
-
-    answer_labels = {"A": "Bisyor vaqt (A)", "B": "Bazzan (B)", "C": "Qarib ne (C)"}
-
-    for i, (q, a) in enumerate(zip(QUESTIONS, answers), 1):
-        if i % 2 == 0:
-            pdf.set_fill_color(245, 245, 245)
-        else:
-            pdf.set_fill_color(255, 255, 255)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(80, 80, 80)
-        short_q = f"{i}. " + (q[:55] + "..." if len(q) > 55 else q)
-        pdf.cell(130, 8, short_q, fill=True)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_text_color(*color)
-        pdf.cell(50, 8, answer_labels.get(a, a), align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
-
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 8, f"Menejer: {MANAGER_PHONE}", align="C", new_x="LMARGIN", new_y="NEXT")
-
-    return pdf.output()
+async def remind_no_manager(user_id: int, state: FSMContext):
+    """Закончил тест, но не пошёл к менеджеру → через 5 мин напомнить 1 раз"""
+    await asyncio.sleep(300)
+    data = await state.get_data()
+    if data.get("test_done") and not data.get("went_to_manager") and not data.get("reminded_manager"):
+        await state.update_data(reminded_manager=True)
+        kb = InlineKeyboardBuilder()
+        kb.button(text="🎁 КОНСУЛТАЦИЯИ РОЙГОН", callback_data="contact_manager")
+        kb.button(text="🏠 Меню",                 callback_data="main_menu")
+        kb.adjust(1)
+        try:
+            await bot.send_message(
+                user_id,
+                "💙 *Ёдат ҳаст?*\n\n"
+                "Ту тестро гузаштӣ, аммо\n"
+                "консултатсияи *РОЙГОН* ҳанӯз интизори туст! 🎁\n\n"
+                "Менеҷер метавонад роҳи шифоро нишонат диҳад —\n"
+                "ин фурсат *танҳо имрӯз* аст! ⏳\n\n"
+                "👇 Як клик — ва тағйирот оғоз мешавад:",
+                parse_mode="Markdown",
+                reply_markup=kb.as_markup()
+            )
+        except Exception as e:
+            logging.warning(f"Remind manager error: {e}")
 
 
 # ─── КЛАВИАТУРЫ ──────────────────────────────────────────────────────────────
@@ -195,6 +162,7 @@ async def cmd_start(message: Message, state: FSMContext):
         "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
         "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
         "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
+        f"👥 *Аллакай {user_counter:,} нафар тестро гузаштанд!*\n\n"
         "👇 Яке аз тугмаҳоро пахш кунед:"
     )
     await message.answer_photo(photo=photo, caption=text,
@@ -229,7 +197,13 @@ async def cb_test(call: CallbackQuery, state: FSMContext):
 async def cb_begin(call: CallbackQuery, state: FSMContext):
     await call.answer()
     await state.set_state(Quiz.question)
-    await state.update_data(q_index=0, answers=[])
+    await state.update_data(
+        q_index=0, answers=[], in_quiz=True, test_done=False,
+        went_to_manager=False, reminded_unfinished=False, reminded_manager=False
+    )
+    # Запускаем напоминание — не закончил тест (1 раз через 5 мин)
+    asyncio.create_task(remind_unfinished(call.from_user.id, state))
+
     progress = make_progress(1)
     text = f"{progress}\n\n❓ *Савол 1 аз 10*\n\n{QUESTIONS[0]}"
     await call.message.edit_caption(caption=text, parse_mode="Markdown",
@@ -239,6 +213,7 @@ async def cb_begin(call: CallbackQuery, state: FSMContext):
 # ─── Ответы на вопросы ────────────────────────────────────────────────────────
 @dp.callback_query(Quiz.question, F.data.startswith("ans_"))
 async def cb_answer(call: CallbackQuery, state: FSMContext):
+    global user_counter
     await call.answer()
     parts   = call.data.split("_")
     letter  = parts[1]
@@ -266,7 +241,12 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
                                         reply_markup=kb_answer(next_q))
     else:
         total_score = sum(SCORES[a] for a in answers)
-        await state.clear()
+        # Тест завершён: счётчик +1, флаги обновляем
+        user_counter += 1
+        await state.update_data(in_quiz=False, test_done=True, answers=answers)
+        await state.set_state(None)
+        # Запускаем напоминание — не написал менеджеру (1 раз через 5 мин)
+        asyncio.create_task(remind_no_manager(call.from_user.id, state))
         await send_result(call, total_score, answers)
 
 
@@ -289,7 +269,8 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
 # ─── Кнопка МЕНЮ ─────────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "main_menu")
 async def cb_main_menu(call: CallbackQuery, state: FSMContext):
-    await state.clear()
+    # Если нажал Меню во время теста — тест брошен, напоминание не сработает
+    await state.update_data(in_quiz=False)
     await call.answer()
     await call.message.edit_media(
         media=InputMediaPhoto(
@@ -300,6 +281,7 @@ async def cb_main_menu(call: CallbackQuery, state: FSMContext):
                 "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
                 "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
                 "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
+                f"👥 *Аллакай {user_counter:,} нафар тестро гузаштанд!*\n\n"
                 "👇 Яке аз тугмаҳоро пахш кунед:"
             ),
             parse_mode="Markdown"
@@ -364,20 +346,6 @@ async def send_result(call: CallbackQuery, score: int, answers: list):
     except FileNotFoundError:
         logging.warning("AUDOI.oga не найден.")
 
-    # PDF отчёт
-    try:
-        user = call.from_user
-        user_name = user.full_name or user.username or "Foydalanuvchi"
-        pdf_bytes = generate_pdf(user_name, score, answers)
-        pdf_file = BufferedInputFile(bytes(pdf_bytes), filename="natija.pdf")
-        await call.message.answer_document(
-            pdf_file,
-            caption="📄 *Натиҷаи шумо дар PDF* — нигоҳ доред! 🗂",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        logging.error(f"PDF error: {e}")
-
 
 # ─── Кнопка ЁРДАМ ────────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "help")
@@ -390,8 +358,8 @@ async def cb_help(call: CallbackQuery):
                 "🆘 *ЁРДАМ*\n\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "🛠 *Техподдержка:*\n"
-                "Агар бот кор намекунад, тугма фишор намешавад,\n"
-                "PDF наомад ё хатогие дидед — нависед:\n"
+                "Агар бот кор намекунад, тугма фишор намешавад\n"
+                "ё хатогие дидед — нависед:\n"
                 f"👤 [{DEV_USERNAME}](https://t.me/{DEV_USERNAME.lstrip('@')})\n\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "💬 *Саволҳо оид ба курс:*\n"
@@ -408,8 +376,10 @@ async def cb_help(call: CallbackQuery):
 
 # ─── Кнопка МЕНЕДЖЕР ─────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "contact_manager")
-async def cb_manager(call: CallbackQuery):
+async def cb_manager(call: CallbackQuery, state: FSMContext):
     await call.answer()
+    # Пользователь пошёл к менеджеру — напоминание больше не нужно
+    await state.update_data(went_to_manager=True)
     text = (
         "🎁 *КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!*\n\n"
         "Шумо қадами дурусте гузоштед! 🌟\n\n"
