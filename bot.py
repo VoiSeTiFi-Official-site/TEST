@@ -164,9 +164,8 @@ def kb_answer(q_index: int):
 
 def kb_result():
     b = InlineKeyboardBuilder()
-    b.button(text="🔄 Такроран гузаштан", callback_data="start_test")
-    b.button(text="📞 Менеҷер",           callback_data="contact_manager")
-    b.button(text="🏠 Меню",               callback_data="main_menu")
+    b.button(text="🎁 КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!", callback_data="contact_manager")
+    b.button(text="🏠 Меню",                            callback_data="main_menu")
     b.adjust(1)
     return b.as_markup()
 
@@ -339,8 +338,12 @@ async def send_result(call: CallbackQuery, score: int, answers: list):
         f"{icon} *{title}*\n\n"
         f"🔢 Хол: *{score} аз 20*\n\n"
         f"{body}\n\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "Такроран тест гузаред ё бо менеҷер тамос гиред 👇"
+        "━━━━━━━━━━━━━━━━\n\n"
+        "🎁 *КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!*\n\n"
+        "Мехоҳӣ бидонӣ, ки чӣ тавр метавонӣ\n"
+        "кӯдаки дарунатро шифо диҳӣ?\n\n"
+        "👇 Менеҷери мо омода аст, ки *РОЙГОН* ба ту кӯмак кунад!\n"
+        "Ин танҳо барои имрӯз аст — фурсатро аз даст надеҳ! ⏳"
     )
     await call.message.edit_caption(caption=text, parse_mode="Markdown",
                                     reply_markup=kb_result())
@@ -392,9 +395,14 @@ async def cb_help(call: CallbackQuery):
 async def cb_manager(call: CallbackQuery):
     await call.answer()
     text = (
-        "📞 *Тамос бо менеҷер*\n\n"
+        "🎁 *КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!*\n\n"
+        "Шумо қадами дурусте гузоштед! 🌟\n\n"
+        "Менеҷери мо бо шумо шахсан сӯҳбат мекунад ва\n"
+        "роҳи шифои кӯдаки дарунатонро нишон медиҳад.\n\n"
+        "💬 Ба менеҷер нависед — вай ҳозир онлайн аст:\n\n"
         f"👤 [{MANAGER_PHONE}](https://t.me/{MANAGER_PHONE.lstrip('@')})\n\n"
-        "Нависед — мо ёрдам мекунем! 💙"
+        "⏳ *Ин консултатсия комилан РОЙГОН аст!*\n"
+        "Нависед ва тағйирот оғоз мешавад! 💙"
     )
     await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
 
