@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery, FSInputFile, InputMediaPhoto, WebAppInfo
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -9,19 +9,22 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ════════════════════════════════════════════
-#  ⚙️  НАСТРОЙКИ — ЗАМЕНИ НА СВОИ
+#  ⚙️  НАСТРОЙКИ
 # ════════════════════════════════════════════
 BOT_TOKEN     = "8458402183:AAHQ225llgy2LKMMMSGM9lPW8XgfUB1l_Iw"
 ADMIN_ID      = 7249758488
 MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"
 DEV_USERNAME  = "@Mustafo_IT"
+
+# 🔗 Ссылка на Mini App — вставь свою после деплоя на Vercel!
+MINI_APP_URL  = "https://ravoni-platform.vercel.app"   # ← ЗАМЕНИ
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher(storage=MemoryStorage())
 
-# ─── СЧЁТЧИК ПОЛЬЗОВАТЕЛЕЙ (в памяти) ───────────────────────────────────────
+# ─── СЧЁТЧИК ПОЛЬЗОВАТЕЛЕЙ ───────────────────────────────────────────────────
 user_counter: int = 0
 
 
@@ -54,9 +57,8 @@ def make_progress(current: int, total: int = 10) -> str:
     return f"📊 Савол {current}/{total}  {filled}{empty}"
 
 
-# ─── АВТО-НАПОМИНАНИЯ (1 РАЗ, на таджикском) ─────────────────────────────────
+# ─── АВТО-НАПОМИНАНИЯ ─────────────────────────────────────────────────────────
 async def remind_unfinished(user_id: int, state: FSMContext):
-    """Начал тест, но не закончил → через 5 мин напомнить 1 раз"""
     await asyncio.sleep(300)
     data = await state.get_data()
     if data.get("in_quiz") and not data.get("reminded_unfinished"):
@@ -81,7 +83,6 @@ async def remind_unfinished(user_id: int, state: FSMContext):
 
 
 async def remind_no_manager(user_id: int, state: FSMContext):
-    """Закончил тест, но не пошёл к менеджеру → через 5 мин напомнить 1 раз"""
     await asyncio.sleep(300)
     data = await state.get_data()
     if data.get("test_done") and not data.get("went_to_manager") and not data.get("reminded_manager"):
@@ -109,9 +110,14 @@ async def remind_no_manager(user_id: int, state: FSMContext):
 # ─── КЛАВИАТУРЫ ──────────────────────────────────────────────────────────────
 def kb_start():
     b = InlineKeyboardBuilder()
-    b.button(text="🧪 ТЕСТ", callback_data="start_test")
+    # 🌐 Кнопка открытия Mini App (WebApp)
+    b.button(
+        text="🌐 Ворид шудан дар Барнома",
+        web_app=WebAppInfo(url=MINI_APP_URL)
+    )
+    b.button(text="🧪 ТЕСТ",  callback_data="start_test")
     b.button(text="🆘 ЁРДАМ", callback_data="help")
-    b.adjust(2)
+    b.adjust(1, 2)   # Mini App — отдельная строка, Тест+Ёрдам — рядом
     return b.as_markup()
 
 def kb_begin_test():
@@ -132,6 +138,11 @@ def kb_answer(q_index: int):
 
 def kb_result():
     b = InlineKeyboardBuilder()
+    # После результата — тоже можно открыть Mini App
+    b.button(
+        text="🌐 Барномаро кушоед",
+        web_app=WebAppInfo(url=MINI_APP_URL)
+    )
     b.button(text="🎁 КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!", callback_data="contact_manager")
     b.button(text="🏠 Меню",                            callback_data="main_menu")
     b.adjust(1)
@@ -165,8 +176,12 @@ async def cmd_start(message: Message, state: FSMContext):
         f"👥 *Аллакай {user_counter:,} нафар тестро гузаштанд!*\n\n"
         "👇 Яке аз тугмаҳоро пахш кунед:"
     )
-    await message.answer_photo(photo=photo, caption=text,
-                               parse_mode="Markdown", reply_markup=kb_start())
+    await message.answer_photo(
+        photo=photo,
+        caption=text,
+        parse_mode="Markdown",
+        reply_markup=kb_start()
+    )
 
 
 # ─── Кнопка ТЕСТ ─────────────────────────────────────────────────────────────
@@ -201,13 +216,12 @@ async def cb_begin(call: CallbackQuery, state: FSMContext):
         q_index=0, answers=[], in_quiz=True, test_done=False,
         went_to_manager=False, reminded_unfinished=False, reminded_manager=False
     )
-    # Запускаем напоминание — не закончил тест (1 раз через 5 мин)
     asyncio.create_task(remind_unfinished(call.from_user.id, state))
-
     progress = make_progress(1)
     text = f"{progress}\n\n❓ *Савол 1 аз 10*\n\n{QUESTIONS[0]}"
-    await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                    reply_markup=kb_answer(0))
+    await call.message.edit_caption(
+        caption=text, parse_mode="Markdown", reply_markup=kb_answer(0)
+    )
 
 
 # ─── Ответы на вопросы ────────────────────────────────────────────────────────
@@ -221,7 +235,6 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
 
     data    = await state.get_data()
     current = data.get("q_index", 0)
-
     if q_index != current:
         return
 
@@ -237,15 +250,14 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
         await state.update_data(q_index=next_q, answers=answers)
         progress = make_progress(next_q + 1)
         text = f"{progress}\n\n❓ *Савол {next_q + 1} аз 10*\n\n{QUESTIONS[next_q]}"
-        await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                        reply_markup=kb_answer(next_q))
+        await call.message.edit_caption(
+            caption=text, parse_mode="Markdown", reply_markup=kb_answer(next_q)
+        )
     else:
         total_score = sum(SCORES[a] for a in answers)
-        # Тест завершён: счётчик +1, флаги обновляем
         user_counter += 1
         await state.update_data(in_quiz=False, test_done=True, answers=answers)
         await state.set_state(None)
-        # Запускаем напоминание — не написал менеджеру (1 раз через 5 мин)
         asyncio.create_task(remind_no_manager(call.from_user.id, state))
         await send_result(call, total_score, answers)
 
@@ -262,14 +274,14 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
     await state.update_data(q_index=prev_index)
     progress = make_progress(prev_index + 1)
     text = f"{progress}\n\n❓ *Савол {prev_index + 1} аз 10*\n\n{QUESTIONS[prev_index]}"
-    await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                    reply_markup=kb_answer(prev_index))
+    await call.message.edit_caption(
+        caption=text, parse_mode="Markdown", reply_markup=kb_answer(prev_index)
+    )
 
 
 # ─── Кнопка МЕНЮ ─────────────────────────────────────────────────────────────
 @dp.callback_query(F.data == "main_menu")
 async def cb_main_menu(call: CallbackQuery, state: FSMContext):
-    # Если нажал Меню во время теста — тест брошен, напоминание не сработает
     await state.update_data(in_quiz=False)
     await call.answer()
     await call.message.edit_media(
@@ -336,8 +348,9 @@ async def send_result(call: CallbackQuery, score: int, answers: list):
         "👇 Менеҷери мо омода аст, ки *РОЙГОН* ба ту кӯмак кунад!\n"
         "Ин танҳо барои имрӯз аст — фурсатро аз даст надеҳ! ⏳"
     )
-    await call.message.edit_caption(caption=text, parse_mode="Markdown",
-                                    reply_markup=kb_result())
+    await call.message.edit_caption(
+        caption=text, parse_mode="Markdown", reply_markup=kb_result()
+    )
 
     # Голосовое
     try:
@@ -378,7 +391,6 @@ async def cb_help(call: CallbackQuery):
 @dp.callback_query(F.data == "contact_manager")
 async def cb_manager(call: CallbackQuery, state: FSMContext):
     await call.answer()
-    # Пользователь пошёл к менеджеру — напоминание больше не нужно
     await state.update_data(went_to_manager=True)
     text = (
         "🎁 *КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!*\n\n"
@@ -390,7 +402,9 @@ async def cb_manager(call: CallbackQuery, state: FSMContext):
         "⏳ *Ин консултатсия комилан РОЙГОН аст!*\n"
         "Нависед ва тағйирот оғоз мешавад! 💙"
     )
-    await call.message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_only())
+    await call.message.answer(
+        text, parse_mode="Markdown", reply_markup=kb_menu_only()
+    )
 
 
 # ─── ЗАПУСК ──────────────────────────────────────────────────────────────────
