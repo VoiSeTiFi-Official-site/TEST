@@ -17,7 +17,7 @@ MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"
 DEV_USERNAME  = "@Mustafo_IT"
 
 # 🔗 Ссылка на Mini App — вставь свою после деплоя на Vercel!
-MINI_APP_URL  = "https://tafo-web-academy.github.io/ravoni-platform/"   # ← ЗАМЕНИ
+MINI_APP_URL  = "https://ravoni.vercel.app/"   # ← ЗАМЕНИ
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
