@@ -1,9 +1,5 @@
 import asyncio
 import logging
-import json
-import os
-import firebase_admin
-from firebase_admin import credentials, firestore
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, FSInputFile, InputMediaPhoto, WebAppInfo
 from aiogram.filters import CommandStart
@@ -26,158 +22,6 @@ MINI_APP_URL  = "https://ravoni-platformm.vercel.app/?v=2"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
-
-# ════════════════════════════════════════════
-#  💾 ХРАНЕНИЕ ЮЗЕРОВ (users.json)
-# ════════════════════════════════════════════
-USERS_FILE = "users.json"
-DATA_FILE  = "data.json"
-
-def load_users() -> set:
-    if not os.path.exists(USERS_FILE):
-        return set()
-    try:
-        with open(USERS_FILE) as f:
-            return set(json.load(f))
-    except:
-        return set()
-
-def save_users(users: set):
-    with open(USERS_FILE, "w") as f:
-        json.dump(list(users), f)
-
-def register_user(user_id: int):
-    users = load_users()
-    users.add(user_id)
-    save_users(users)
-
-def load_counter() -> int:
-    if not os.path.exists(DATA_FILE):
-        return 0
-    try:
-        with open(DATA_FILE) as f:
-            return json.load(f).get("user_counter", 0)
-    except:
-        return 0
-
-def save_counter(count: int):
-    data = {}
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE) as f:
-                data = json.load(f)
-        except:
-            pass
-    data["user_counter"] = count
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
-
-# ════════════════════════════════════════════
-#  🔥 FIREBASE ADMIN — слушаем новые посты
-# ════════════════════════════════════════════
-db_admin = None
-
-def init_firebase():
-    global db_admin
-    try:
-        # Читаем из Railway переменной окружения
-        creds_json = os.environ.get("GOOGLE_CREDS")
-        if not creds_json:
-            logging.warning("⚠️ GOOGLE_CREDS не найден! Firebase listener отключён.")
-            return
-        cred_data = json.loads(creds_json)
-        cred = credentials.Certificate(cred_data)
-        firebase_admin.initialize_app(cred)
-        db_admin = firestore.client()
-        logging.info("✅ Firebase Admin подключён!")
-    except Exception as e:
-        logging.error(f"Firebase init error: {e}")
-
-async def send_post_notification(post_data: dict):
-    """Рассылаем уведомление о новом посте всем юзерам"""
-    users = load_users()
-    if not users:
-        return
-
-    # Берём текст поста (первые 200 символов)
-    text = post_data.get("text", "")
-    author = post_data.get("author", "Ҷаннат Абдуллоева")
-    preview = text[:200] + ("..." if len(text) > 200 else "")
-
-    notification = (
-        f"🌿 *Паёми нав аз {author}:*\n\n"
-        f"{preview}\n\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"👇 Барои хондани пурра барномаро кушоед:"
-    )
-
-    # Кнопка открыть платформу
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
-    kb = InlineKeyboardBuilder()
-    kb.button(
-        text="👀 Постро дидан →",
-        web_app=WebAppInfo(url=MINI_APP_URL)
-    )
-    kb.adjust(1)
-
-    sent = 0
-    for user_id in users:
-        try:
-            await bot.send_message(
-                user_id,
-                notification,
-                parse_mode="Markdown",
-                reply_markup=kb.as_markup()
-            )
-            sent += 1
-            await asyncio.sleep(0.05)
-        except Exception as e:
-            logging.warning(f"Send to {user_id} failed: {e}")
-
-    logging.info(f"📢 Пост разослан {sent}/{len(users)} юзерам")
-
-    # Уведомляем админа
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"✅ *Рассылка тамом!*\n"
-            f"📤 {sent}/{len(users)} нафар гирифт",
-            parse_mode="Markdown"
-        )
-    except:
-        pass
-
-def start_firestore_listener(loop):
-    """Слушаем коллекцию posts — новый документ = рассылка"""
-    if not db_admin:
-        return
-
-    # Запоминаем ID существующих постов чтобы не слать старые
-    existing_ids = set()
-    try:
-        docs = db_admin.collection("posts").get()
-        existing_ids = {d.id for d in docs}
-        logging.info(f"📚 Найдено {len(existing_ids)} существующих постов")
-    except Exception as e:
-        logging.error(f"Error getting existing posts: {e}")
-
-    def on_snapshot(col_snapshot, changes, read_time):
-        for change in changes:
-            if change.type.name == "ADDED":
-                doc_id = change.document.id
-                # Пропускаем старые посты
-                if doc_id in existing_ids:
-                    continue
-                existing_ids.add(doc_id)
-                post_data = change.document.to_dict()
-                logging.info(f"🔔 Новый пост: {doc_id}")
-                # Запускаем рассылку
-                asyncio.run_coroutine_threadsafe(
-                    send_post_notification(post_data), loop
-                )
-
-    db_admin.collection("posts").on_snapshot(on_snapshot)
-    logging.info("👂 Firebase listener запущен — жду новых постов...")
 dp  = Dispatcher(storage=MemoryStorage())
 
 # ─── СЧЁТЧИК ПОЛЬЗОВАТЕЛЕЙ ───────────────────────────────────────────────────
@@ -292,23 +136,15 @@ def kb_answer(q_index: int):
     b.adjust(1)
     return b.as_markup()
 
-def kb_result(score: int = 0, title: str = ""):
+def kb_result():
     b = InlineKeyboardBuilder()
+    # После результата — тоже можно открыть Mini App
     b.button(
         text="🌐 Барномаро кушоед",
         web_app=WebAppInfo(url=MINI_APP_URL)
     )
     b.button(text="🎁 КОНСУЛТАЦИЯИ БЕ ПУЛ — РОЙГОН!", callback_data="contact_manager")
-    # Кнопка поделиться результатом
-    share_text = (
-        f"🧪 Ман тести «Кӯдаки дарун»-ро гузаштам!\n\n"
-        f"Натиҷаи ман: {title} ({score}/20)\n\n"
-        f"🌿 Ту ҳам гузар 👉 @kudaki_darun_bot"
-    )
-    import urllib.parse
-    share_url = f"https://t.me/share/url?url=https://t.me/kudaki_darun_bot&text={urllib.parse.quote(share_text)}"
-    b.button(text="📤 Натиҷаро бо дӯстон мубодила кун", url=share_url)
-    b.button(text="🏠 Меню", callback_data="main_menu")
+    b.button(text="🏠 Меню",                            callback_data="main_menu")
     b.adjust(1)
     return b.as_markup()
 
@@ -330,8 +166,6 @@ def kb_help():
 @dp.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    register_user(message.from_user.id)
-    counter = load_counter()
     photo = FSInputFile("photo_start.png")
     text = (
         "✨ *Хуш омадед!*\n\n"
@@ -339,7 +173,7 @@ async def cmd_start(message: Message, state: FSMContext):
         "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
         "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
         "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
-        f"👥 *Аллакай {counter:,} нафар тестро гузаштанд!*\n\n"
+        f"👥 *Аллакай {user_counter:,} нафар тестро гузаштанд!*\n\n"
         "👇 Яке аз тугмаҳоро пахш кунед:"
     )
     await message.answer_photo(
@@ -421,8 +255,7 @@ async def cb_answer(call: CallbackQuery, state: FSMContext):
         )
     else:
         total_score = sum(SCORES[a] for a in answers)
-        new_count = load_counter() + 1
-        save_counter(new_count)
+        user_counter += 1
         await state.update_data(in_quiz=False, test_done=True, answers=answers)
         await state.set_state(None)
         asyncio.create_task(remind_no_manager(call.from_user.id, state))
@@ -451,7 +284,6 @@ async def cb_back(call: CallbackQuery, state: FSMContext):
 async def cb_main_menu(call: CallbackQuery, state: FSMContext):
     await state.update_data(in_quiz=False)
     await call.answer()
-    counter = load_counter()
     await call.message.edit_media(
         media=InputMediaPhoto(
             media=FSInputFile("photo_start.png"),
@@ -461,7 +293,7 @@ async def cb_main_menu(call: CallbackQuery, state: FSMContext):
                 "Ин бот ба шумо кӯмак мекунад, ки ҳолати *кӯдаки дарунатонро* бифаҳмед.\n\n"
                 "🌱 Тест хеле содда аст — танҳо 10 савол.\n"
                 "Ҷавоб деҳ ва натиҷаро бубинед!\n\n"
-                f"👥 *Аллакай {counter:,} нафар тестро гузаштанд!*\n\n"
+                f"👥 *Аллакай {user_counter:,} нафар тестро гузаштанд!*\n\n"
                 "👇 Яке аз тугмаҳоро пахш кунед:"
             ),
             parse_mode="Markdown"
@@ -577,12 +409,6 @@ async def cb_manager(call: CallbackQuery, state: FSMContext):
 
 # ─── ЗАПУСК ──────────────────────────────────────────────────────────────────
 async def main():
-    # Инициализируем Firebase
-    init_firebase()
-    # Запускаем Firestore listener в текущем event loop
-    loop = asyncio.get_event_loop()
-    start_firestore_listener(loop)
-    # Запускаем бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
