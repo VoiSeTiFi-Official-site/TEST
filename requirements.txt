@@ -1,3 +1,6 @@
 aiogram==3.7.0
 fpdf2
 firebase-admin==6.5.0
+
+
+
