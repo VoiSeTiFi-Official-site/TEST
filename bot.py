@@ -17,7 +17,7 @@ MANAGER_PHONE = "@Jannat_Abdullaeva_Admin"
 DEV_USERNAME  = "@Mustafo_IT"
 
 # 🔗 Ссылка на Mini App — вставь свою после деплоя на Vercel!
-MINI_APP_URL  = "https://ravoni-platformm.vercel.app/?v=7"
+MINI_APP_URL  = "https://ravoni-platformm.vercel.app/?v=8"
 # ════════════════════════════════════════════
 
 logging.basicConfig(level=logging.INFO)
